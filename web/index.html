@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pricing Engine Demo</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --text: #1b1f24; --muted: #667085; --line: #e4e7ec;
+    --accent: #2b59c3; --ok: #127a43; --bad: #b42318; --up: #127a43; --down: #b42318;
+    --flash: #fff4c2; --code: #f2f4f7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1216; --card: #171b21; --text: #e6e8eb; --muted: #98a2b3; --line: #2a3038;
+      --accent: #7aa2ff; --ok: #47c47e; --bad: #f97066; --up: #47c47e; --down: #f97066;
+      --flash: #3d3618; --code: #20252c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, Segoe UI, sans-serif; }
+  header { padding: 20px 16px 8px; max-width: 1200px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  header p { margin: 0; color: var(--muted); }
+  main { max-width: 1200px; margin: 0 auto; padding: 8px 16px 32px; display: grid; gap: 16px;
+         grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; }
+  section.wide { grid-column: 1 / -1; }
+  h2 { font-size: 15px; margin: 0 0 4px; display: flex; gap: 8px; align-items: center; }
+  .step { background: var(--accent); color: #fff; border-radius: 50%; width: 22px; height: 22px;
+          display: inline-grid; place-items: center; font-size: 12px; flex: none; }
+  .hint { color: var(--muted); margin: 0 0 12px; font-size: 13px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 8px 0 3px; }
+  input, select { width: 100%; padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px;
+                  background: var(--bg); color: var(--text); font: inherit; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  button { padding: 7px 12px; border: 1px solid var(--accent); background: var(--accent); color: #fff;
+           border-radius: 6px; font: inherit; cursor: pointer; }
+  button.secondary { background: transparent; color: var(--accent); }
+  button:disabled { opacity: .5; cursor: default; }
+  .status { margin-top: 10px; font-size: 13px; padding: 8px 10px; border-radius: 6px; background: var(--code);
+            overflow-wrap: anywhere; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12px; border: 1px solid currentColor; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; }
+  .tablewrap { overflow-x: auto; }
+  tr.flash td { background: var(--flash); transition: none; }
+  td { transition: background .8s; }
+  .up { color: var(--up); } .down { color: var(--down); }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+  .stat { background: var(--code); border-radius: 8px; padding: 8px 10px; }
+  .stat b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; }
+  .stat span { font-size: 12px; color: var(--muted); }
+  #log { font: 12px/1.5 ui-monospace, Consolas, monospace; background: var(--code); border-radius: 6px;
+         padding: 8px 10px; max-height: 220px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+  .pending-item { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Real-Time Pricing Engine — demo</h1>
+  <p>Live prices are trading functionality, so they are only streamed to logged-in users whose KYC is verified.</p>
+</header>
+
+<main>
+  <section>
+    <h2><span class="step">1</span>Register / log in</h2>
+    <p class="hint">New accounts start with KYC status <b>pending</b>.</p>
+    <label for="email">Email</label>
+    <input id="email" type="email" value="trader@example.com" autocomplete="username">
+    <label for="password">Password (min 8 characters)</label>
+    <input id="password" type="password" value="trader-pass-1" autocomplete="current-password">
+    <div class="row">
+      <button id="btnRegister" class="secondary">Register</button>
+      <button id="btnLogin">Log in</button>
+    </div>
+    <div class="status" id="userStatus">Not logged in.</div>
+  </section>
+
+  <section>
+    <h2><span class="step">2</span>Submit KYC</h2>
+    <p class="hint">The document number is encrypted before it is stored; only the last 4 characters stay readable.</p>
+    <label for="fullName">Full name</label>
+    <input id="fullName" value="Test Trader">
+    <label for="docType">Document type</label>
+    <select id="docType">
+      <option value="passport">Passport</option>
+      <option value="national_id">National ID</option>
+      <option value="driving_license">Driving license</option>
+    </select>
+    <label for="docNumber">Document number</label>
+    <input id="docNumber" value="N1234567">
+    <div class="row"><button id="btnKyc">Submit KYC</button></div>
+  </section>
+
+  <section>
+    <h2><span class="step">3</span>Admin: review KYC</h2>
+    <p class="hint">Use the <code>ADMIN_EMAIL</code> / <code>ADMIN_PASSWORD</code> from <code>.env</code>. Admins cannot approve themselves.</p>
+    <label for="adminEmail">Admin email</label>
+    <input id="adminEmail" value="admin@kyc.local" autocomplete="off">
+    <label for="adminPassword">Admin password</label>
+    <input id="adminPassword" type="password" autocomplete="off">
+    <div class="row">
+      <button id="btnAdminLogin">Admin log in</button>
+      <button id="btnPending" class="secondary" disabled>Load pending</button>
+    </div>
+    <div id="pendingList"></div>
+  </section>
+
+  <section class="wide">
+    <h2><span class="step">4</span>Live prices</h2>
+    <p class="hint">24h high, low and % change are computed by this server, not taken from the feed.
+      <b>Latency</b> = time from the tick reaching the server to it showing here.</p>
+    <label for="symbols">Symbols (comma separated)</label>
+    <input id="symbols" value="XAUUSD,EURUSD,BTCUSD,GBPUSD,USDJPY,ETHUSD">
+    <div class="row">
+      <button id="btnConnect">Connect</button>
+      <button id="btnAll" class="secondary">Subscribe all 61</button>
+      <button id="btnDisconnect" class="secondary" disabled>Disconnect</button>
+    </div>
+    <div class="status" id="wsStatus">Not connected.</div>
+    <div class="tablewrap" style="margin-top:10px">
+      <table>
+        <thead><tr><th>Symbol</th><th>Bid</th><th>Ask</th><th>24h High</th><th>24h Low</th><th>24h %</th><th>Msg size</th><th>Latency</th></tr></thead>
+        <tbody id="prices"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Server stats</h2>
+    <p class="hint">From <code>GET /stats</code>, refreshed every 2 seconds.</p>
+    <div class="stats" id="stats"></div>
+  </section>
+
+  <section>
+    <h2>Request log</h2>
+    <p class="hint">Every API call this page makes, with the status code.</p>
+    <pre id="log"></pre>
+  </section>
+</main>
+
+<script>
+const ALL = ["AUDUSD","AUDCAD","AUDCHF","AUDJPY","AUDNZD","AUDSGD","CADCHF","CADJPY","CHFJPY","CHFSGD",
+  "EURAUD","EURCAD","EURCHF","EURGBP","EURJPY","EURNZD","EURUSD","GBPAUD","GBPCAD","GBPCHF","GBPJPY",
+  "GBPNZD","GBPUSD","NZDCAD","NZDCHF","NZDJPY","NZDUSD","USDCAD","USDCHF","USDCNH","USDJPY","USDMXN",
+  "USDNOK","USDPLN","USDSEK","USDSGD","USDTRY","USDZAR","EURTRY","GBPTRY","NOKJPY","SEKJPY","SGDJPY",
+  "ZARJPY","XAUUSD","XAGUSD","BTCUSD","ETHUSD","BNBUSD","SOLUSD","XRPUSD","ADAUSD","DOGUSD","DOTUSD",
+  "LTCUSD","BCHUSD","XLMUSD","TRXUSD","UNIUSD","FILUSD","AVXUSD"];
+
+const $ = id => document.getElementById(id);
+let userToken = "", adminToken = "", ws = null;
+const rows = new Map();
+
+function log(line, ok) {
+  const t = new Date().toLocaleTimeString();
+  const el = document.createElement("div");
+  el.textContent = `${t}  ${line}`;
+  if (ok === true) el.className = "ok";
+  if (ok === false) el.className = "bad";
+  $("log").prepend(el);
+}
+
+async function api(method, path, token, body) {
+  const headers = {};
+  if (body) headers["Content-Type"] = "application/json";
+  if (token) headers["Authorization"] = "Bearer " + token;
+  const res = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  let data = null;
+  try { data = await res.json(); } catch {}
+  const msg = data && data.error ? ` — ${data.error}` : "";
+  log(`${method} ${path} → ${res.status}${msg}`, res.ok);
+  return { status: res.status, ok: res.ok, data };
+}
+
+function showStatus(el, html, cls) {
+  el.className = "status " + (cls || "");
+  el.replaceChildren();
+  for (const part of html) el.append(part);
+}
+
+function kycBadge(status) {
+  const b = document.createElement("span");
+  b.className = "badge " + (status === "verified" ? "ok" : status === "rejected" ? "bad" : "");
+  b.textContent = "KYC: " + status;
+  return b;
+}
+
+async function refreshMe() {
+  if (!userToken) return;
+  const r = await api("GET", "/me", userToken);
+  if (!r.ok) return;
+  const u = r.data;
+  const parts = [`Logged in as ${u.email} (role: ${u.role})  `, kycBadge(u.kyc.status)];
+  if (u.kyc.reject_reason) parts.push(`  Reason: ${u.kyc.reject_reason}`);
+  showStatus($("userStatus"), parts);
+}
+
+// ---------- 1. register / login ----------
+$("btnRegister").onclick = async () => {
+  const r = await api("POST", "/auth/register", "", { email: $("email").value, password: $("password").value });
+  if (r.ok) showStatus($("userStatus"), ["Registered. Now log in."], "ok");
+  else showStatus($("userStatus"), [r.data?.error || "failed"], "bad");
+};
+$("btnLogin").onclick = async () => {
+  const r = await api("POST", "/auth/login", "", { email: $("email").value, password: $("password").value });
+  if (!r.ok) { showStatus($("userStatus"), [r.data?.error || "failed"], "bad"); return; }
+  userToken = r.data.token;
+  refreshMe();
+};
+
+// ---------- 2. KYC ----------
+$("btnKyc").onclick = async () => {
+  if (!userToken) { showStatus($("userStatus"), ["Log in first."], "bad"); return; }
+  await api("POST", "/kyc/submit", userToken, {
+    full_name: $("fullName").value, document_type: $("docType").value, document_number: $("docNumber").value,
+  });
+  refreshMe();
+};
+
+// ---------- 3. admin ----------
+$("btnAdminLogin").onclick = async () => {
+  const r = await api("POST", "/auth/login", "", { email: $("adminEmail").value, password: $("adminPassword").value });
+  if (!r.ok) return;
+  adminToken = r.data.token;
+  $("btnPending").disabled = false;
+  loadPending();
+};
+$("btnPending").onclick = () => loadPending();
+
+async function loadPending() {
+  const r = await api("GET", "/admin/kyc/pending", adminToken);
+  const list = $("pendingList");
+  list.replaceChildren();
+  if (!r.ok) return;
+  if (r.data.length === 0) {
+    const p = document.createElement("p"); p.className = "hint"; p.style.marginTop = "10px";
+    p.textContent = "Nobody is waiting for review.";
+    list.append(p); return;
+  }
+  for (const u of r.data) {
+    const box = document.createElement("div"); box.className = "pending-item";
+    const info = document.createElement("div");
+    info.textContent = `${u.email} — ${u.kyc.full_name}, ${u.kyc.document_type} ••••${u.kyc.document_last4}`;
+    const row = document.createElement("div"); row.className = "row";
+    const ok = document.createElement("button"); ok.textContent = "Approve";
+    const no = document.createElement("button"); no.textContent = "Reject"; no.className = "secondary";
+    ok.onclick = () => review(u.id, "approve");
+    no.onclick = () => review(u.id, "reject", prompt("Reason for rejection?") || "");
+    row.append(ok, no); box.append(info, row); list.append(box);
+  }
+}
+async function review(id, decision, reason) {
+  await api("POST", "/admin/kyc/review", adminToken, { user_id: id, decision, reason });
+  loadPending();
+  refreshMe();
+}
+
+// ---------- 4. live prices ----------
+function wantedSymbols() {
+  return $("symbols").value.split(",").map(s => s.trim().toUpperCase()).filter(Boolean);
+}
+
+$("btnConnect").onclick = async () => {
+  if (!userToken) { showStatus($("wsStatus"), ["Log in first (step 1)."], "bad"); return; }
+  // A browser can't read why a WebSocket upgrade was refused, so check first for a clear message.
+  const me = await api("GET", "/me", userToken);
+  if (!me.ok) { showStatus($("wsStatus"), ["Token expired. Log in again."], "bad"); return; }
+  if (me.data.kyc.status !== "verified") {
+    showStatus($("wsStatus"), ["The server will refuse this connection (403): KYC is ", kycBadge(me.data.kyc.status)], "bad");
+  }
+  if (ws) ws.close();
+  ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws?token=${encodeURIComponent(userToken)}`);
+  ws.onopen = () => {
+    showStatus($("wsStatus"), ["Connected. Subscribed to: " + wantedSymbols().join(", ")], "ok");
+    ws.send(JSON.stringify({ action: "subscribe", symbols: wantedSymbols() }));
+    $("btnDisconnect").disabled = false;
+  };
+  ws.onmessage = e => onPrice(e.data);
+  ws.onclose = e => {
+    $("btnDisconnect").disabled = true;
+    if (e.code === 1006 && me.data.kyc.status !== "verified") return; // already explained above
+    showStatus($("wsStatus"), [`Disconnected (code ${e.code}${e.reason ? ", " + e.reason : ""}).`], e.code === 1000 ? "" : "bad");
+  };
+};
+$("btnAll").onclick = () => {
+  $("symbols").value = ALL.join(",");
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ action: "subscribe", symbols: ALL }));
+    showStatus($("wsStatus"), ["Connected. Subscribed to all 61 symbols."], "ok");
+  }
+};
+$("btnDisconnect").onclick = () => ws && ws.close(1000, "bye");
+
+const fmt = v => v >= 1000 ? v.toFixed(2) : v >= 10 ? v.toFixed(3) : v.toFixed(5);
+
+function onPrice(raw) {
+  let m;
+  try { m = JSON.parse(raw); } catch { return; }
+  if (!m.s) { log("server: " + raw, false); return; }
+
+  let r = rows.get(m.s);
+  if (!r) {
+    const tr = document.createElement("tr");
+    r = { tr, cells: [] };
+    for (let i = 0; i < 8; i++) { const td = document.createElement("td"); tr.append(td); r.cells.push(td); }
+    r.cells[0].textContent = m.s;
+    rows.set(m.s, r);
+    const body = $("prices");
+    const after = [...body.children].find(x => x.firstChild.textContent > m.s);
+    body.insertBefore(tr, after || null);
+  }
+  const c = r.cells;
+  const dir = r.lastBid === undefined ? "" : m.b > r.lastBid ? "up" : m.b < r.lastBid ? "down" : "";
+  r.lastBid = m.b;
+  c[1].textContent = fmt(m.b); c[1].className = dir;
+  c[2].textContent = fmt(m.a);
+  c[3].textContent = fmt(m.h);
+  c[4].textContent = fmt(m.l);
+  c[5].textContent = (m.c >= 0 ? "+" : "") + m.c.toFixed(2) + "%";
+  c[5].className = m.c > 0 ? "up" : m.c < 0 ? "down" : "";
+  c[6].textContent = new Blob([raw]).size + " B";
+  c[7].textContent = Math.max(0, Date.now() - m.t) + " ms";
+  r.tr.classList.remove("flash"); void r.tr.offsetWidth; r.tr.classList.add("flash");
+  setTimeout(() => r.tr.classList.remove("flash"), 150);
+}
+
+// ---------- stats ----------
+async function refreshStats() {
+  try {
+    const s = await (await fetch("/stats")).json();
+    const items = [
+      ["Ticks accepted", s.ticks_accepted], ["Duplicates dropped", s.duplicates_dropped],
+      ["Out-of-order", s.out_of_order], ["Symbols tracked", s.symbols], ["Clients online", s.clients_online],
+    ];
+    $("stats").replaceChildren(...items.map(([k, v]) => {
+      const d = document.createElement("div"); d.className = "stat";
+      const b = document.createElement("b"); b.textContent = Number(v).toLocaleString();
+      const sp = document.createElement("span"); sp.textContent = k;
+      d.append(b, sp); return d;
+    }));
+  } catch {}
+}
+refreshStats();
+setInterval(refreshStats, 2000);
+</script>
+</body>
+</html>

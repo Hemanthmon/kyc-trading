@@ -10,6 +10,7 @@ import (
 	"kyc-backend/hub"
 	"kyc-backend/persist"
 	"kyc-backend/store"
+	"kyc-backend/web"
 	"log"
 	"net"
 	"net/http"
@@ -69,8 +70,10 @@ func main() {
 		log.Fatal("cannot listen on :8080: ", err)
 	}
 
+	http.HandleFunc("GET /{$}", web.Handler) // demo page
 	http.HandleFunc("/health", healthHandler)
 	http.HandleFunc("/hello", greedHandler)
+	http.HandleFunc("GET /stats", statsHandler(st, h))
 	authSvc.Routes(http.DefaultServeMux)
 	// Live prices = trading functionality: only logged-in, KYC-verified users.
 	http.Handle("/ws", authSvc.RequireAuth(auth.RequireKYC(hub.Handler(h, st))))
@@ -103,6 +106,21 @@ func main() {
 	<-feedDone
 	<-saverDone
 	log.Println("shutdown complete")
+}
+
+// statsHandler reports live counters: GET /stats
+func statsHandler(st *store.Store, h *hub.Hub) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		accepted, dups, ooo := st.Counters()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"ticks_accepted":     accepted,
+			"duplicates_dropped": dups,
+			"out_of_order":       ooo,
+			"symbols":            st.Len(),
+			"clients_online":     h.Count(),
+		})
+	}
 }
 
 func greedHandler(w http.ResponseWriter, r *http.Request) {

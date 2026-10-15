@@ -35,7 +35,7 @@ func (s *Service) Routes(mux *http.ServeMux) {
 
 // register: POST /auth/register {"email","password"} → new user with KYC "pending".
 func (s *Service) register(w http.ResponseWriter, r *http.Request) {
-	
+
 	var req models.LoginRequest
 	if !readJSON(w, r, &req) {
 		return

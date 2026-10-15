@@ -66,6 +66,13 @@ func (s *Store) Counters() (accepted, duplicates, outOfOrder uint64) {
 	return s.accepted, s.duplicates, s.outOfOrder
 }
 
+// Len returns how many symbols have received at least one price.
+func (s *Store) Len() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.latest)
+}
+
 // Get returns the latest tick for a symbol.
 // ok is false if we have never received that symbol.
 func (s *Store) Get(symbol string) (tick models.Tick, ok bool) {
