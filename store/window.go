@@ -22,17 +22,18 @@ type Window struct {
 	buckets [windowMinutes]Bucket
 }
 
-
-
 func minuteOf(t time.Time) int64 {
 	return t.Unix() / 60
 }
 
 func (w *Window) Add(price float64, at time.Time) {
-		m := minuteOf(at)
-       b := &w.buckets[m%windowMinutes] 
+	m := minuteOf(at)
+	b := &w.buckets[m%windowMinutes]
 
-	   if b.Minute != m {
+	if b.Minute > m {
+		return // slot already holds a newer minute → this price is over 24h late, ignore it
+	}
+	if b.Minute != m {
 		// slot is empty or holds a minute from 24h ago → start a fresh bucket
 		*b = Bucket{Minute: m, Open: price, High: price, Low: price}
 		return
@@ -46,8 +47,7 @@ func (w *Window) Add(price float64, at time.Time) {
 
 }
 
-
-func (w * Window) Stats(now time.Time,  current float64 ) (st Stats, ok bool) {
+func (w *Window) Stats(now time.Time, current float64) (st Stats, ok bool) {
 
 	nowMin := minuteOf(now)
 	oldest := nowMin - windowMinutes + 1
@@ -57,7 +57,7 @@ func (w * Window) Stats(now time.Time,  current float64 ) (st Stats, ok bool) {
 
 	for i := range w.buckets {
 		b := w.buckets[i]
-          
+
 		if b.Minute < oldest || b.Minute > nowMin {
 			continue // empty, or older than 24h → ignore
 		}
@@ -77,7 +77,7 @@ func (w * Window) Stats(now time.Time,  current float64 ) (st Stats, ok bool) {
 		if b.Low < st.Low {
 			st.Low = b.Low
 		}
-        if b.Minute < openMin { // found an even older bucket
+		if b.Minute < openMin { // found an even older bucket
 			openMin, openPrice = b.Minute, b.Open
 		}
 	}

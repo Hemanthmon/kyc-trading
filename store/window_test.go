@@ -38,10 +38,10 @@ func TestWindowDropsOldData(t *testing.T) {
 	var w Window
 	start := time.Date(2026, 10, 15, 10, 0, 0, 0, time.UTC)
 
-	w.Add(50, start)                       // very low price at 10:00 yesterday
-	w.Add(100, start.Add(23*time.Hour))    // normal price 23h later
+	w.Add(50, start)                    // very low price at 10:00 yesterday
+	w.Add(100, start.Add(23*time.Hour)) // normal price 23h later
 
-	now := start.Add(25 * time.Hour)       // 25h after the first tick
+	now := start.Add(25 * time.Hour) // 25h after the first tick
 	st, ok := w.Stats(now, 100)
 
 	if !ok {
