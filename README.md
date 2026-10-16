@@ -134,9 +134,31 @@ Prices are served **from memory**. MongoDB is only there so the 24h data survive
 - **Fan-out** (`hub.go`, `Broadcast`): for each new price, the message is built once and dropped into the 256-slot queue of every client subscribed to that symbol. The hub never waits on a client.
 - **Slow clients** (`client.go`, `trySend`): if a client's queue is full, it can't keep up and is disconnected. One slow client never delays the others or the feed.
 
-## KYC
+## Security: KYC and authentication
 
-Statuses go `pending → submitted → verified / rejected`, and only an admin can approve. Passwords are hashed with bcrypt, and document numbers are encrypted with AES-256-GCM (only the last 4 characters are readable). The JWT only carries the user id; role and KYC status are read from the database on each request, so revoking access works immediately.
+> *When implementing a new merchant account creation feature, what checks would you add to ensure only verified users can access trading functionality?*
+
+These are the checks I'd add, and the ones this project implements.
+
+**KYC validation**
+- Every user has a KYC status: `pending → submitted → verified`, or `rejected` with a reason (they can resubmit).
+- Status changes are conditional database updates. A user can't skip a step (`pending` straight to `verified`), and two requests at once can't both succeed.
+- Trading functionality (live prices on `/ws`) is behind `RequireKYC`, which checks `verified` **on the server**. The client never decides this.
+- The status is read fresh from the database on every request, not from the token. Rejecting someone takes effect on their next request.
+
+**Role-based access**
+- Roles: `user`, `merchant`, `admin`. Only an admin can review KYC or change roles.
+- **A merchant account can only be created for a KYC-verified user**: the role change is refused otherwise.
+- An admin can't approve their own KYC, so it always takes a second person.
+- Every KYC decision and role change goes into an audit log with who did it.
+
+**Secure storage of sensitive data**
+- Passwords are hashed with bcrypt.
+- KYC document numbers are encrypted with AES-256-GCM before they're saved. Only the last 4 characters are kept readable.
+- Secrets (feed keys, JWT secret, encryption key) live in `.env`, which is never committed. The app refuses to start with a weak JWT secret or a wrong-sized key.
+- Login returns the same error, in about the same time, for a wrong email and a wrong password, so it can't be used to find out who has an account.
+
+In production the manual admin review would be replaced by a KYC provider that checks the ID document and screens sanctions lists. The checks above stay the same.
 
 ## Performance
 
