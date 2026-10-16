@@ -1,0 +1,31 @@
+services:
+  mongo:
+    image: mongo:8
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:27017:27017" # reachable from this PC only, so `go run .` can use it too
+    volumes:
+      - mongo-data:/data/db # data survives `docker compose down` and restarts
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    build: .
+    restart: unless-stopped # crashed? Docker starts it again; state is restored from Mongo
+    depends_on:
+      mongo:
+        condition: service_healthy # don't start until Mongo answers
+    env_file: .env # feed keys, JWT secret, encryption key, admin account
+    environment:
+      MONGODB_URI: mongodb://mongo:27017 # overrides .env: use the mongo container
+    ports:
+      - "8080:8080"
+    # docker stop sends SIGTERM, then kills after this long. Shutdown needs up to
+    # ~2s for the feed close handshake + up to 5s for the final save.
+    stop_grace_period: 20s
+
+volumes:
+  mongo-data:

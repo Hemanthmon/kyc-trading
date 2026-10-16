@@ -23,8 +23,9 @@ import (
 )
 
 func main() {
+	//load the env
 	if err := godotenv.Load(); err != nil {
-		log.Println("no .env file found")
+		log.Println("no .env file, using environment variables")
 	}
 
 	// 1. Connect to MongoDB
